@@ -1,0 +1,5 @@
+<Solution>
+    <Project Path="server/API/API.csproj" Type="Classic C#" />
+    <Project Path="server/Service/Service.csproj" Type="Classic C#" />
+    <Project Path="server/Infra/Infra.csproj" Type="Classic C#" />
+</Solution>

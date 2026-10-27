@@ -10,7 +10,10 @@ public class User
     
     [Column(Name = "Username"), NotNull]
     public string Username { get; set; } = string.Empty;
-    
+
+    [Column(Name = "Role"), NotNull]
+    public string Role { get; set; } = string.Empty;
+
     [Column(Name = "PasswordHash"), NotNull]
     public string PasswordHash { get; set; } = string.Empty;
     

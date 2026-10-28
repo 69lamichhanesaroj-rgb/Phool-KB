@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Service;
+using Service.DTOs;
 
 namespace API.Controllers;
 
@@ -8,7 +9,7 @@ namespace API.Controllers;
 public class UserController(UserService _userService) : ControllerBase
 {
     [HttpGet]
-    public List<UserDto> GetUsers()
+    public List<DisplayUsers> GetUsers()
     {
         return _userService.GetUsers();
     }

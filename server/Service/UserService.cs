@@ -1,14 +1,12 @@
-﻿using Infra.Entities;
-using Infra;
+﻿using Infra;
+using Service.DTOs;
 
 namespace Service;
 
-public record UserDto(int Id, string Username, string Role);
-
 public class UserService(AppDataConnection db)
 {
-    public List<UserDto> GetUsers()
+    public List<DisplayUsers> GetUsers()
     {
-        return db.Users.Select(u => new UserDto(u.Id, u.Username, u.Role)).ToList();
+        return db.Users.Select(u => new DisplayUsers(u.Id, u.Username, u.Role)).ToList();
     }
 }

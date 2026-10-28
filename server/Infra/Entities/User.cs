@@ -15,8 +15,8 @@ public class User
     public string Role { get; set; } = string.Empty;
 
     [Column(Name = "PasswordHash"), NotNull]
-    public string PasswordHash { get; set; } = string.Empty;
-    
+    public byte[] PasswordHash { get; set; } = Array.Empty<byte>();
+
     [Column(Name = "PasswordSalt"), NotNull]
-    public string PasswordSalt { get; set; } = string.Empty;
+    public byte[] PasswordSalt { get; set; } = Array.Empty<byte>();
 }

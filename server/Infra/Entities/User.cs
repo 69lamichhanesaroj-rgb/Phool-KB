@@ -11,8 +11,11 @@ public class User
     [Column(Name = "Username"), NotNull]
     public string Username { get; set; } = string.Empty;
 
-    [Column(Name = "Role"), NotNull]
-    public string Role { get; set; } = string.Empty;
+    [Column(Name = "RoleId"), NotNull]
+    public int RoleId { get; set; }
+    
+    [Association(ThisKey = nameof(RoleId), OtherKey = nameof(Role.Id), CanBeNull = false)]
+    public Role Role { get; set; } = null!;
 
     [Column(Name = "PasswordHash"), NotNull]
     public byte[] PasswordHash { get; set; } = Array.Empty<byte>();

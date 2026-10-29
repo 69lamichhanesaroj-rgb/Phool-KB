@@ -1,24 +1,17 @@
-import { APITester } from "./APITester";
-import "./index.css";
+import {LoginPage} from "./LoginPage";
+import {useState} from "react";
+import { UsersPage } from "./UsersPage";
+import type { User } from "./types";
 
-import logo from "./logo.svg";
-import reactLogo from "./react.svg";
 
 export function App() {
-  return (
-    <div className="app">
-      <div className="logo-container">
-        <img src={logo} alt="Bun Logo" className="logo bun-logo" />
-        <img src={reactLogo} alt="React Logo" className="logo react-logo" />
-      </div>
 
-      <h1>Bun + React</h1>
-      <p>
-        Edit <code>src/App.tsx</code> and save to test HMR
-      </p>
-      <APITester />
-    </div>
-  );
+    const [user, setUser] = useState<User | null>(null);
+
+    if (user === null) {
+        return <LoginPage onLogin={setUser}/>;
+
+    }
+
+    return <UsersPage me={user} onLogout={() => setUser(null)}/>;
 }
-
-export default App;

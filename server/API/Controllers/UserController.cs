@@ -6,11 +6,17 @@ namespace API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class UserController(UserService _userService) : ControllerBase
+public class UserController(UserService userService) : ControllerBase
 {
     [HttpGet]
-    public List<DisplayUsers> GetUsers()
+    public List<UsersDto> GetUsers()
     {
-        return _userService.GetUsers();
+        return userService.GetUsers();
+    }
+
+    [HttpPost]
+    public void CreateUser(string username, int roleId, string password)
+    {
+        userService.CreateUser(username, roleId, password);
     }
 }

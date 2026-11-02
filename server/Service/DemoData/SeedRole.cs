@@ -4,7 +4,7 @@ using LinqToDB;
 
 namespace Service;
 
-public class CreateRole(AppDataConnection db)
+public class SeedRole(AppDataConnection db)
 {
     private void Create(string roleName)
     {

@@ -8,4 +8,9 @@ public class RoleService(AppDataConnection db)
     {
         return db.Roles.Select(r => new RoleDto(r.Id, r.RoleName)).ToList();
     }
+
+    public RoleDto? GetRole(int id)
+    {
+        return db.Roles.Where(r => r.Id == id).Select(r => new RoleDto(r.Id, r.RoleName)).SingleOrDefault();
+    }
 }

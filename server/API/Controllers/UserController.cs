@@ -1,6 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Service;
-using Service.DTOs;
 
 namespace API.Controllers;
 
@@ -9,14 +9,24 @@ namespace API.Controllers;
 public class UserController(UserService userService) : ControllerBase
 {
     [HttpGet]
-    public List<UsersDto> GetUsers()
+    [Authorize]
+    public List<UserDto> GetUsers()
     {
         return userService.GetUsers();
     }
 
     [HttpPost]
-    public void CreateUser(string username, int roleId, string password)
+    [Authorize(Roles = "superuser,admin")]
+    public IActionResult CreateUser([FromBody] CreateUserRequest request)
     {
-        userService.CreateUser(username, roleId, password);
+        try
+        {
+            userService.CreateUser(request.Username, request.RoleId, request.Password);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
     }
 }

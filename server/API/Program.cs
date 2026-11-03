@@ -33,7 +33,7 @@ builder.Services
         };
     });
 
-var clientOrigin = builder.Configuration["Cors:ClientOrigin"] ?? "https://localhost:3000";
+var clientOrigin = builder.Configuration["Cors:ClientOrigin"] ?? "http://localhost:3000";
 
 builder.Services.AddCors(options =>
 {

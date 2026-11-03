@@ -33,6 +33,13 @@ builder.Services
         };
     });
 
+var clientOrigin = builder.Configuration["Cors:ClientOrigin"] ?? "https://localhost:3000";
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("client", policy => policy.WithOrigins(clientOrigin).AllowAnyHeader().AllowAnyMethod());
+});
+
 builder.Services.AddAuthorization();
 
 // DI registrations
@@ -64,6 +71,7 @@ using (var scope = app.Services.CreateScope())
     scope.ServiceProvider.GetRequiredService<SeedRole>().SeedRoles();
     scope.ServiceProvider.GetRequiredService<SeedUser>().SeedUsers();
 }
+app.UseCors("client");
 app.MapControllers();
 
 app.Run();

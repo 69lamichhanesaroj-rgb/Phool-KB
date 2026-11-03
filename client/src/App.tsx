@@ -2,6 +2,7 @@ import { useState } from "react";
 import "./index.css";
 import { LoginPage } from "./LoginPage";
 import { UsersPage } from "./UsersPage";
+import { logout } from "./api";
 import type { User } from "./types";
 
 export function App() {
@@ -14,7 +15,5 @@ export function App() {
     }
 
     // somebody is logged in -> show the users page
-    return <UsersPage me={user} onLogout={() => setUser(null)} />;
+    return <UsersPage me={user} onLogout={() => { logout(); setUser(null); }} />;
 }
-
-export default App;

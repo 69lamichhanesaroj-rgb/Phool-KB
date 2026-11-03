@@ -1,75 +1,103 @@
 import type { Role, User } from "./types";
 
-// ---------------------------------------------------------------
-// FAKE BACKEND
-// Everything here pretends to be the server. Later, each function
-// will be replaced with a fetch() call to the ASP.NET API.
-// The pages only use the function names, so they will not change.
-// ---------------------------------------------------------------
+const API_BASE = "http://localhost:5154";
+const TOKEN_KEY = "phool.token";
+let token: string | null = localStorage.getItem(TOKEN_KEY);
 
-const users: User[] = [
-    { id: 1, username: "admin", role: "admin" },
-    { id: 2, username: "superuser", role: "superuser" },
-    { id: 3, username: "user", role: "user" },
-];
+function setToken(value: string | null) {
+    token = value;
+    if (value === null) localStorage.removeItem(TOKEN_KEY);
+    else localStorage.setItem(TOKEN_KEY, value);
+}
 
-// the fake passwords, saved by user id. A real server only stores hashes!
-const passwords: Record<number, string> = {
-    1: "admin123",
-    2: "superuser123",
-    3: "user123",
-};
+type RoleRow = { id: number; roleName: Role };
+let rolesCache: RoleRow[] | null = null;
 
-let nextId = 4;
+async function getRoles(): Promise<RoleRow[]> {
+    rolesCache ??= await request<RoleRow[]>("/api/role");
+    return rolesCache;
+}
 
-// pretend the network is slow
-const wait = () => new Promise((resolve) => setTimeout(resolve, 500));
+async function roleIdOf(role: Role): Promise<number> {
+    const roles = await getRoles();
+    const found = roles.find((r) => r.roleName === role);
+    if (!found) throw new Error(`Unknown role "${role}"`);
+    return found.id;
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const headers = new Headers(init.headers);
+    headers.set("Content-Type", "application/json");
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    let response: Response;
+    try {
+        response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+    } catch {
+        throw new Error("Cannot reach the server. Is the API running?");
+    }
+
+    if (response.status === 401 && path !== "/api/auth/login") {
+        setToken(null);
+        throw new SessionExpiredError();
+    }
+
+    if (!response.ok) {
+        let message = `Request failed (${response.status})`;
+        try {
+            const body = await response.json();
+            if (body?.message) message = body.message;
+        } catch {
+            // body was empty or not json — keep the fallback
+        }
+        throw new Error(message);
+    }
+
+    if (response.status === 204) return undefined as T; // our endpoints return No Content
+    return (await response.json()) as T;
+}
+
+type LoginResponse = { token: string; id: number; username: string; role: Role };
 
 export async function login(username: string, password: string): Promise<User> {
-    await wait();
-    const found = users.find((u) => u.username === username);
-    if (found && passwords[found.id] === password) {
-        return found;
-    }
-    throw new Error("Invalid username or password");
+    const result = await request<LoginResponse>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+    });
+    setToken(result.token);
+    return { id: result.id, username: result.username, role: result.role };
+}
+
+export function logout() {
+    setToken(null);
+    rolesCache = null;
 }
 
 export async function getUsers(): Promise<User[]> {
-    await wait();
-    return [...users];
+    return request<User[]>("/api/user");
 }
 
 export async function createUser(username: string, password: string, role: Role): Promise<void> {
-    await wait();
-    const exists = users.find((u) => u.username === username);
-    if (exists) {
-        throw new Error("That username is already taken");
-    }
-    const newUser: User = { id: nextId, username: username, role: role };
-    nextId = nextId + 1;
-    users.push(newUser);
-    passwords[newUser.id] = password;
+    await request<void>("/api/user", {
+        method: "POST",
+        body: JSON.stringify({ username, password, roleId: await roleIdOf(role) }),
+    });
 }
 
-// password can be "" which means: keep the old password
 export async function updateUser(id: number, username: string, role: Role, password: string): Promise<void> {
-    await wait();
-    const user = users.find((u) => u.id === id);
-    if (!user) {
-        throw new Error("User does not exist");
-    }
-    user.username = username;
-    user.role = role;
-    if (password !== "") {
-        passwords[id] = password;
-    }
+    await request<void>(`/api/user/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ username, password, roleId: await roleIdOf(role) }),
+    });
 }
 
 export async function deleteUser(id: number): Promise<void> {
-    await wait();
-    const index = users.findIndex((u) => u.id === id);
-    if (index === -1) {
-        throw new Error("User does not exist");
+    await request<void>(`/api/user/${id}`, { method: "DELETE" });
+}
+
+export class SessionExpiredError extends Error {
+    constructor() {
+        super("Your session expired. Please log in again.");
+        this.name = "SessionExpiredError";
     }
-    users.splice(index, 1);
 }

@@ -1,16 +1,15 @@
 ﻿using Infra;
 using Infra.Entities;
 using LinqToDB;
-using Service.DTOs;
 using Service.Security;
 
 namespace Service;
 
 public class UserService(AppDataConnection db, HashingPassword hp)
 {
-    public List<UsersDto> GetUsers()
+    public List<UserDto> GetUsers()
     {
-        return db.Users.Select(u => new UsersDto(u.Id, u.Username, u.RoleId, u.PasswordHash, u.PasswordSalt)).ToList();
+        return (from u in db.Users join r in db.Roles on u.RoleId equals r.Id select new UserDto(u.Id, u.Username, r.RoleName)).ToList();
     }
 
     public void CreateUser(string username, int roleId, string password)

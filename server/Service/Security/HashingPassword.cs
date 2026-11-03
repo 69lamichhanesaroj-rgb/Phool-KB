@@ -1,9 +1,10 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 using Konscious.Security.Cryptography;
-using Service.DTOs;
 
 namespace Service.Security;
+
+public record PasswordHashResult(byte[] Hash, byte[] Salt);
 
 public class HashingPassword
 {
@@ -25,7 +26,7 @@ public class HashingPassword
         return new PasswordHashResult(hash, salt);
     }
 
-    public bool VerifyPassword(string password, byte[] storedSalt, byte[] hashedPassword)
+    public bool VerifyPassword(string password, byte[] hashedPassword, byte[] storedSalt)
     {
         var newHashedPassword = HashPassword(password, storedSalt);
 

@@ -1,5 +1,8 @@
 <Solution>
-    <Project Path="server/API/API.csproj" Type="Classic C#" />
-    <Project Path="server/Service/Service.csproj" Type="Classic C#" />
-    <Project Path="server/Infra/Infra.csproj" Type="Classic C#" />
+    <Folder Name="/Solution Items/">
+        <File Path="compose.yaml" />
+    </Folder>
+    <Project Path="server/API/API.csproj" Type="C#" />
+    <Project Path="server/Service/Service.csproj" Type="C#" />
+    <Project Path="server/Infra/Infra.csproj" Type="C#" />
 </Solution>

@@ -10,7 +10,6 @@
     environment:
       - ConnectionStrings__Default=Data Source=/app/data/phool.db
       - Cors__ClientOrigin=http://10.5.71.74:8080
-      - Jwt__Key=${JWT_KEY}
     volumes:
       - phool_data:/app/data
 

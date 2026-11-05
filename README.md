@@ -26,7 +26,7 @@ About 60 devices today. The design leaves room for growth (more employees, more 
 
 ### 2.1 Private range
 
-We use the private range **10.0.0.0/8** (RFC 1918), because the assignment already fixes VLAN 570 and 571 as `10.5.70.0/24` and `10.5.71.0/24`. We follow the same pattern for the other networks: **VLAN 57x → subnet `10.5.7x.0`**. The VLAN ID can be read from the address and the other way round.
+We use the private range **10.0.0.0/8**, because the assignment already fixes VLAN 570 and 571 as `10.5.70.0/24` and `10.5.71.0/24`. We follow the same pattern for the other networks: **VLAN 57x → subnet `10.5.7x.0`**. The VLAN ID can be read from the address and the other way round.
 
 ### 2.2 Networks
 
@@ -48,7 +48,7 @@ We use the private range **10.0.0.0/8** (RFC 1918), because the assignment alrea
 |---|---|
 | **Security** | An infected guest phone or a weak IoT camera cannot reach the servers when they are in other networks. |
 | **Control** | The firewall can only filter traffic *between* networks. With separate VLANs it can say "clients may reach the server only on TCP 8000–8100". |
-| **Performance** | Broadcasts (e.g. ARP) stay inside one VLAN, so each network is a smaller broadcast domain. |
+| **Performance** | Broadcasts stay inside one VLAN, so each network is a smaller broadcast domain. |
 | **Management** | Rules, troubleshooting and documentation are simpler when each network has one purpose. |
 | **Growth** | New devices can be added to one segment without disturbing the others. |
 
@@ -128,6 +128,7 @@ Proposed architecture for the whole company. Only the parts marked **implemented
 | Hostname / user | `phool` / `phool` |
 | SSH | OpenSSH server installed |
 
+<img width="1591" height="602" alt="server final image" src="https://github.com/user-attachments/assets/b2110a97-c7d7-4ccb-b0a2-88c6c1b06fe7" />
 
 ### 5.2 Ubuntu Server installation
 
@@ -231,6 +232,8 @@ curl -i -X POST http://localhost:8081/api/auth/login -H "Content-Type: applicati
 
 
 ![Login API test and listening ports](docs/images/server-api-login-ss.png)
+<img width="1536" height="805" alt="200 ok server" src="https://github.com/user-attachments/assets/53c66b0b-2975-40de-ac3f-f40416740493" />
+
 *The API answers the login request with **200 OK** and a JWT token, and `ss -tulpn` shows ports 8080 and 8081 listening on all interfaces (`0.0.0.0`) through `docker-proxy`.*
 
 
@@ -248,6 +251,7 @@ The client VM is a second virtual machine used to test access to the login platf
 | Interface / MAC | `ens18` / `bc:24:11:81:b4:01` |
 
 The Proxmox environment offers only one SDN vnet (`VLAN571`, "Servers") and the normal bridge `vmbr0`. The client therefore uses `vmbr0` without a VLAN tag, which places it in the client network `10.5.70.0/24` (we tested `vmbr0` with tag 570 as well, but only the untagged setting received an address). A likely explanation is that the physical port behind `vmbr0` already carries VLAN 570 untagged, so the college's network delivers the client VLAN without any tag from the VM. The server VM uses the vnet `VLAN571`.
+<img width="1280" height="734" alt="VM client" src="https://github.com/user-attachments/assets/f36e9c38-893d-49c4-9849-cc963cb7f20d" />
 
 
 ## 8. VLANs, routing and the firewall explained
@@ -267,7 +271,9 @@ It reduces the attack surface (only the intended service can be reached), follow
 ---
 
 ## 9. Final reflection
+<img width="1280" height="886" alt="client finale image" src="https://github.com/user-attachments/assets/ddf82a8f-ed51-4ceb-820b-f20e98e94a1f" />
 
+<img width="1280" height="879" alt="finale ui" src="https://github.com/user-attachments/assets/bc92aa15-caaa-49f2-9ca0-f87fe9a5dc63" />
 **How are security and infrastructure connected?**
 A secure application is only as safe as the path leading to it. Argon2id password hashing and role checks protect the data inside the application, while VLAN segmentation, the firewall and port filtering protect the route to it. Allowing only TCP 8000–8100 between VLANs means that even a compromised client can reach nothing but the login platform. This is defense in depth.
 
@@ -277,14 +283,17 @@ Finding the real default gateway, fixing the Netplan YAML, understanding Proxmox
 **What we learned about deploying an application on a server.**
 Containers make a deployment repeatable, but the network matters as much as the code: port mapping, the listen address (`0.0.0.0`, not `127.0.0.1`), CORS and a persistent volume must all be right. Testing bottom-up (VLAN → IP → gateway → port → application) and locally on the server first makes errors much easier to locate. The error type also tells something: *refused* means the host answers but nothing listens on the port, *timed out* usually means a firewall drops the packets, and *no route to host* means the router cannot find the destination.
 
+
+
+
 **What we would do differently in a real company.**
 
 | Area | Improvement |
 |---|---|
-| Encryption | HTTPS through a reverse proxy (nginx or Caddy); today passwords cross the network over plain HTTP. |
+| Encryption | HTTPS through a reverse proxy; today passwords cross the network over plain HTTP. |
 | Network | More VLANs (guest, voice, printers, cameras, management), a DMZ for anything Internet-facing, and a redundant firewall and uplink. |
 | Secrets | Load the JWT signing key and other secrets from environment variables or a secrets manager instead of `appsettings.json`, and force a password change for the seeded demo users. |
-| Access | SSH keys instead of passwords, a host firewall (UFW) as a second layer, and 802.1X for Wi-Fi. |
+| Access | SSH keys instead of passwords, a host firewall as a second layer, and 802.1X for Wi-Fi. |
 | Operations | Regular updates of the OS and container images, monitoring and logging, and backups of the Docker volume with a tested restore process. |
 | Source control | Do not commit the SQLite database file (`phool.db`) to Git. |
 

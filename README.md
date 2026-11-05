@@ -1,10 +1,133 @@
-# CDS.infrastructure – Kvist & Bjælke ApS
+# Kvist & Bjælke ApS User Management Solution
+#### **Group:** Phool | **Semester:** 3rd
 
-**Group:** Phool | **Semester:** 3rd | **Platform:** Proxmox 
+## CDS.security
+
+### 1. Authentication method
+
+**Argon2id** - chosen because it won the Password Hashing Competition (PHC) in 2015 and was standardised in RFC 9106 (2021). 
+
+Argon2 is memory-hard - every guess must also occupy 32 MiB of RAM by default, therefore large-scale parallel cracking becomes expensive. The three cost parameters (memory, iterations, parallelism) can be raised as hardware gets faster without changing stored hashes. 
+
+Passwords are stored only as a 32-byte hash plus a random 16-byte salt per user, with constant-time comparison for verification so the check leaks no timing information. A successful login issues a JSON Web Token (HS256, 15 minutes) which the client sends as a bearer token. The API validates its signature, issuer, audience and lifetime and reads the role claim for authorisation.
+
+**HashingPassword.cs**
+```csharp
+private byte[] HashPassword(string password, byte[] salt)
+{
+    Argon2id argon2 = new Argon2id(Encoding.UTF8.GetBytes(password));
+    argon2.Salt = salt;
+    argon2.MemorySize = 32 * 1024;
+    argon2.Iterations = 4;
+    argon2.DegreeOfParallelism = 1;
+
+    return argon2.GetBytes(32);
+}
+
+public bool VerifyPassword(string password, byte[] hashedPassword, byte[] storedSalt)
+{
+    var newHashedPassword = HashPassword(password, storedSalt);
+    return CryptographicOperations.FixedTimeEquals(newHashedPassword, hashedPassword);
+}
+```
+**TokenGen.cs**
+```csharp
+var claims = new List<Claim>
+{
+    new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+    new(ClaimTypes.Name, user.Username),
+    new(ClaimTypes.Role, roleName),
+};
+
+var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.Key));
+var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+var token = new JwtSecurityToken(
+    options.Issuer,
+    options.Audience,
+    claims,
+    expires: DateTime.UtcNow.AddMinutes(options.ExpiryMinutes),
+    signingCredentials: credentials
+);
+```
+**UserController.cs** - authorization
+```csharp 
+[HttpGet] [Authorize]
+[HttpPost] [Authorize(Roles = "superuser,admin")]
+```
+
+| Parameter | Value |
+|---|---|
+| Memory | 32 MiB (OWASP minimum 19 MiB) |
+| Iterations | 4 (OWASP minimum 2) |
+| Salt | 16 bytes, `RandomNumberGenerator` |
+| Output | 32 bytes |
+| Token | JWT, HS256, 15 min|
+
+### 2. Password handling and storage
+
+A password is never stored. When a user is created, or when their password is changed, `HashAndSaltPassword` generates a fresh 16-byte salt from `RandomNumberGenerator` and derives a 32-byte Argon2id hash from it. 
+
+Only those two byte arrays are written to the `Users` table. The plaintext exists in memory for the length of the request and is then discarded. A new salt is generated on every creation and on every password change, so two users with the same password get completely different hashes and a changed password cannot be spotted by comparing old and new values. The salt is stored next to the hash in a separate column.
+
+**User.cs**
+```csharp
+[Column(Name = "PasswordHash"), NotNull]
+public byte[] PasswordHash { get; set; } = Array.Empty<byte>();
+
+[Column(Name = "PasswordSalt"), NotNull]
+public byte[] PasswordSalt { get; set; } = Array.Empty<byte>();
+```
+
+**UserService.cs** - `CreateUser`
+```csharp
+var passwordHashResult = hp.HashAndSaltPassword(password);
+var user = new User
+{
+    Username = username,
+    RoleId = roleId,
+    PasswordHash = passwordHashResult.Hash,
+    PasswordSalt = passwordHashResult.Salt
+};
+db.Insert(user);
+```
+**UserService.cs** - `UpdateUser`
+```csharp
+if (!string.IsNullOrEmpty(password))
+{
+    var hash = hp.HashAndSaltPassword(password);
+    user.PasswordHash = hash.Hash;
+    user.PasswordSalt = hash.Salt;
+}
+```
+
+**SeedUser.cs** 
+```csharp
+public void SeedUsers()
+{
+    Create("admin", "admin", "admin123");
+    Create("superuser", "superuser", "superuser123");
+    Create("user", "user", "user123");
+}
+```
+
+The full path of a password is therefore: HTTP request body -> `AuthService`/`UserService` -> `HashingPassword` -> hash + salt in SQLite (`phool.db`, the `phool_data` Docker volume).
+
+### 3. Screenshots demonstrating key functionality
+
+The recording below walks through the whole flow against the deployed instance (`10.5.71.74:8080`).
+
+Example seeded logins/passwords provided for easy testing.
+
+![Login and user management walkthrough](resources/login-showcase.gif)
+
+## CDS.infrastructure
+
+**Platform:** Proxmox 
 
 ---
 
-## 1. Company requirements
+### 1. Company requirements
 
 | Device | Quantity | Purpose |
 |---|---:|---|
@@ -22,13 +145,13 @@ About 60 devices today. The design leaves room for growth (more employees, more 
 
 ---
 
-## 2. IP addressing plan
+### 2. IP addressing plan
 
-### 2.1 Private range
+#### 2.1 Private range
 
-We use the private range **10.0.0.0/8**, because the assignment already fixes VLAN 570 and 571 as `10.5.70.0/24` and `10.5.71.0/24`. We follow the same pattern for the other networks: **VLAN 57x → subnet `10.5.7x.0`**. The VLAN ID can be read from the address and the other way round.
+We use the private range **10.0.0.0/8** (RFC 1918), because the assignment already fixes VLAN 570 and 571 as `10.5.70.0/24` and `10.5.71.0/24`. We follow the same pattern for the other networks: **VLAN 57x → subnet `10.5.7x.0`**. The VLAN ID can be read from the address and the other way round.
 
-### 2.2 Networks
+#### 2.2 Networks
 
 | VLAN | Name | Subnet | Mask | Gateway | Devices |
 |---:|---|---|---|---|---|
@@ -42,13 +165,13 @@ We use the private range **10.0.0.0/8**, because the assignment already fixes VL
 
 **Gateway addresses.** The gateway of VLAN 571 is `10.5.71.5`. We found it by inspecting the network, the common `.1` convention does **not** apply in this environment. The firewall/router owns the gateway address in every VLAN, so we use the same `.5` pattern for the other VLANs. VLAN 570's gateway `10.5.70.5` is confirmed from the client's `ip route` output. VLANs 572–576 are a proposal and are not implemented.
 
-### 2.3 Why we segment the network
+#### 2.3 Why we segment the network
 
 | Reason | Explanation |
 |---|---|
 | **Security** | An infected guest phone or a weak IoT camera cannot reach the servers when they are in other networks. |
 | **Control** | The firewall can only filter traffic *between* networks. With separate VLANs it can say "clients may reach the server only on TCP 8000–8100". |
-| **Performance** | Broadcasts stay inside one VLAN, so each network is a smaller broadcast domain. |
+| **Performance** | Broadcasts (e.g. ARP) stay inside one VLAN, so each network is a smaller broadcast domain. |
 | **Management** | Rules, troubleshooting and documentation are simpler when each network has one purpose. |
 | **Growth** | New devices can be added to one segment without disturbing the others. |
 
@@ -62,7 +185,7 @@ We use the private range **10.0.0.0/8**, because the assignment already fixes VL
 | Guests | Yes (575) | Untrusted: Internet only, no internal access. |
 | Network equipment | Yes (576) | Only administrators should be able to configure it. |
 
-### 2.4 Static IP addresses vs. DHCP
+#### 2.4 Static IP addresses vs. DHCP
 
 | Device | Method | Why |
 |---|---|---|
@@ -86,7 +209,7 @@ In our lab, the **server VM uses a static address** (`10.5.71.74`) and the **cli
 
 ---
 
-## 3. Subnetting
+### 3. Subnetting
 
 Usable hosts = 2^(host bits) − 2. The first address is the network address and the last is the broadcast address; neither can be assigned to a device.
 
@@ -108,15 +231,15 @@ Block size = 256 − last mask octet (/27: 256 − 224 = 32; /26: 256 − 192 = 
 
 ---
 
-## 4. Network diagram
+### 4. Network diagram
 
 Proposed architecture for the whole company. Only the parts marked **implemented** were built in the virtual environment (VLAN 570 client, VLAN 571 server).
 
 
 
-## 5. Server VM on VLAN 571
+### 5. Server VM on VLAN 571
 
-### 5.1 Virtual machine
+#### 5.1 Virtual machine
 
 | Parameter | Value |
 |---|---|
@@ -128,9 +251,8 @@ Proposed architecture for the whole company. Only the parts marked **implemented
 | Hostname / user | `phool` / `phool` |
 | SSH | OpenSSH server installed |
 
-<img width="1591" height="602" alt="server final image" src="https://github.com/user-attachments/assets/b2110a97-c7d7-4ccb-b0a2-88c6c1b06fe7" />
 
-### 5.2 Ubuntu Server installation
+#### 5.2 Ubuntu Server installation
 
 Installed from the Ubuntu Server ISO with the text installer: English, standard "Ubuntu Server" (not minimized), entire disk, OpenSSH server enabled, no extra snaps. At the network step, `ens18` was set to a **manual IPv4 configuration**:
 
@@ -143,7 +265,7 @@ Installed from the Ubuntu Server ISO with the text installer: English, standard 
 
 
 
-### 5.3 IP configuration
+#### 5.3 IP configuration
 
 ```text
 $ ip a        ->  ens18: UP, inet 10.5.71.74/24, brd 10.5.71.255
@@ -154,9 +276,9 @@ $ ping google.com    -> 4/4 replies, 0 % loss (about 23 ms)
 ```
 
 
-## 6. Docker installation and deployment
+### 6. Docker installation and deployment
 
-### 6.1 Docker installation
+#### 6.1 Docker installation
 
 Docker Engine was installed on the server VM  and verified:
 
@@ -170,7 +292,7 @@ docker --version
 sudo systemctl status docker
 sudo docker run hello-world
 ```
-### 6.2 Getting the application onto the server
+#### 6.2 Getting the application onto the server
 
 ```bash
 sudo apt install -y git
@@ -178,7 +300,7 @@ git clone https://github.com/69lamichhanesaroj-rgb/Phool-KB.git
 cd Phool-KB
 ```
 
-### 6.3 Deployment with Docker Compose
+#### 6.3 Deployment with Docker Compose
 
 The login platform consists of two parts, each with its own Dockerfile, started together by one compose file:
 
@@ -232,12 +354,10 @@ curl -i -X POST http://localhost:8081/api/auth/login -H "Content-Type: applicati
 
 
 ![Login API test and listening ports](docs/images/server-api-login-ss.png)
-<img width="1536" height="805" alt="200 ok server" src="https://github.com/user-attachments/assets/53c66b0b-2975-40de-ac3f-f40416740493" />
-
 *The API answers the login request with **200 OK** and a JWT token, and `ss -tulpn` shows ports 8080 and 8081 listening on all interfaces (`0.0.0.0`) through `docker-proxy`.*
 
 
-## 7. Client VM on VLAN 570
+### 7. Client VM on VLAN 570
 
 The client VM is a second virtual machine used to test access to the login platform from a different network than the server.
 
@@ -251,10 +371,9 @@ The client VM is a second virtual machine used to test access to the login platf
 | Interface / MAC | `ens18` / `bc:24:11:81:b4:01` |
 
 The Proxmox environment offers only one SDN vnet (`VLAN571`, "Servers") and the normal bridge `vmbr0`. The client therefore uses `vmbr0` without a VLAN tag, which places it in the client network `10.5.70.0/24` (we tested `vmbr0` with tag 570 as well, but only the untagged setting received an address). A likely explanation is that the physical port behind `vmbr0` already carries VLAN 570 untagged, so the college's network delivers the client VLAN without any tag from the VM. The server VM uses the vnet `VLAN571`.
-<img width="1280" height="734" alt="VM client" src="https://github.com/user-attachments/assets/f36e9c38-893d-49c4-9849-cc963cb7f20d" />
 
 
-## 8. VLANs, routing and the firewall explained
+### 8. VLANs, routing and the firewall explained
 
 **Why are VLAN 570 and VLAN 571 separate networks?**
 They hold devices with different trust levels and purposes. Servers hold the company's applications and data and need stronger protection than employee machines that browse the web and may be infected. Separate networks also let the firewall control exactly what may pass between them, keep broadcasts inside each VLAN, and make rules and troubleshooting simpler.
@@ -270,10 +389,8 @@ It reduces the attack surface (only the intended service can be reached), follow
 
 ---
 
-## 9. Final reflection
-<img width="1280" height="886" alt="client finale image" src="https://github.com/user-attachments/assets/ddf82a8f-ed51-4ceb-820b-f20e98e94a1f" />
+### 9. Final reflection
 
-<img width="1280" height="879" alt="finale ui" src="https://github.com/user-attachments/assets/bc92aa15-caaa-49f2-9ca0-f87fe9a5dc63" />
 **How are security and infrastructure connected?**
 A secure application is only as safe as the path leading to it. Argon2id password hashing and role checks protect the data inside the application, while VLAN segmentation, the firewall and port filtering protect the route to it. Allowing only TCP 8000–8100 between VLANs means that even a compromised client can reach nothing but the login platform. This is defense in depth.
 
@@ -283,17 +400,14 @@ Finding the real default gateway, fixing the Netplan YAML, understanding Proxmox
 **What we learned about deploying an application on a server.**
 Containers make a deployment repeatable, but the network matters as much as the code: port mapping, the listen address (`0.0.0.0`, not `127.0.0.1`), CORS and a persistent volume must all be right. Testing bottom-up (VLAN → IP → gateway → port → application) and locally on the server first makes errors much easier to locate. The error type also tells something: *refused* means the host answers but nothing listens on the port, *timed out* usually means a firewall drops the packets, and *no route to host* means the router cannot find the destination.
 
-
-
-
 **What we would do differently in a real company.**
 
 | Area | Improvement |
 |---|---|
-| Encryption | HTTPS through a reverse proxy; today passwords cross the network over plain HTTP. |
+| Encryption | HTTPS through a reverse proxy (nginx or Caddy); today passwords cross the network over plain HTTP. |
 | Network | More VLANs (guest, voice, printers, cameras, management), a DMZ for anything Internet-facing, and a redundant firewall and uplink. |
 | Secrets | Load the JWT signing key and other secrets from environment variables or a secrets manager instead of `appsettings.json`, and force a password change for the seeded demo users. |
-| Access | SSH keys instead of passwords, a host firewall as a second layer, and 802.1X for Wi-Fi. |
+| Access | SSH keys instead of passwords, a host firewall (UFW) as a second layer, and 802.1X for Wi-Fi. |
 | Operations | Regular updates of the OS and container images, monitoring and logging, and backups of the Docker volume with a tested restore process. |
 | Source control | Do not commit the SQLite database file (`phool.db`) to Git. |
 
@@ -301,10 +415,10 @@ Containers make a deployment repeatable, but the network matters as much as the 
 
 
 
-##  Summary
+###  Summary
 We proposed a network with seven VLANs (clients, servers, voice, printers, cameras, guests, management). Each VLAN has its own subnet and gateway, and the two required networks are 10.5.70.0/24 (clients) and 10.5.71.0/24 (servers). In the virtual environment we built an Ubuntu Server VM on VLAN 571 (10.5.71.74) that runs the login platform in Docker on ports 8080 (web) and 8081 (API). A second VM on VLAN 570 (10.5.70.99) reached the platform through the school’s firewall, which allows only TCP 8000–8100. SSH and ping were blocked, as expected.
 
-##  Reference
+###  Reference
 
 Docker Inc. (n.d.). Install Docker Engine on Ubuntu. Docker Docs. https://docs.docker.com/engine/install/ubuntu/
 

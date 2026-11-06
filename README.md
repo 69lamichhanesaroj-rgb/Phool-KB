@@ -234,7 +234,7 @@ Block size = 256 − last mask octet (/27: 256 − 224 = 32; /26: 256 − 192 = 
 
 ### 4. Network diagram
 
-Proposed architecture for the whole company. Only the parts marked **implemented** were built in the virtual environment (VLAN 570 client, VLAN 571 server).
+<img width="1440" height="688" alt="network-diagram" src="https://github.com/user-attachments/assets/c7e0c3f5-0dd8-4379-8f41-73f4807b22e2" />
 
 
 

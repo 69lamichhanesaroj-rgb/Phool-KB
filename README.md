@@ -1,3 +1,4 @@
+
 # Kvist & Bjælke ApS User Management Solution
 #### **Group:** Phool | **Semester:** 3rd
 
@@ -251,8 +252,12 @@ Proposed architecture for the whole company. Only the parts marked **implemented
 | Hostname / user | `phool` / `phool` |
 | SSH | OpenSSH server installed |
 
+<img width="1536" height="805" alt="200 ok server" src="https://github.com/user-attachments/assets/8c1b7e51-8bf8-4038-8738-be17b4d6c15f" />
+
+
 
 #### 5.2 Ubuntu Server installation
+
 
 Installed from the Ubuntu Server ISO with the text installer: English, standard "Ubuntu Server" (not minimized), entire disk, OpenSSH server enabled, no extra snaps. At the network step, `ens18` was set to a **manual IPv4 configuration**:
 
@@ -372,6 +377,8 @@ The client VM is a second virtual machine used to test access to the login platf
 
 The Proxmox environment offers only one SDN vnet (`VLAN571`, "Servers") and the normal bridge `vmbr0`. The client therefore uses `vmbr0` without a VLAN tag, which places it in the client network `10.5.70.0/24` (we tested `vmbr0` with tag 570 as well, but only the untagged setting received an address). A likely explanation is that the physical port behind `vmbr0` already carries VLAN 570 untagged, so the college's network delivers the client VLAN without any tag from the VM. The server VM uses the vnet `VLAN571`.
 
+<img width="1280" height="734" alt="VM client" src="https://github.com/user-attachments/assets/8a0eea3d-e985-438f-93dd-88581d2c112c" />
+
 
 ### 8. VLANs, routing and the firewall explained
 
@@ -390,6 +397,9 @@ It reduces the attack surface (only the intended service can be reached), follow
 ---
 
 ### 9. Final reflection
+
+<img width="1280" height="886" alt="client finale image" src="https://github.com/user-attachments/assets/2d8a03d7-5e02-48a0-b6a9-d8ceccc2f21f" />
+<img width="1280" height="879" alt="finale ui" src="https://github.com/user-attachments/assets/5b8fc72c-5e2c-4dda-a385-d287765a11ba" />
 
 **How are security and infrastructure connected?**
 A secure application is only as safe as the path leading to it. Argon2id password hashing and role checks protect the data inside the application, while VLAN segmentation, the firewall and port filtering protect the route to it. Allowing only TCP 8000–8100 between VLANs means that even a compromised client can reach nothing but the login platform. This is defense in depth.
@@ -425,3 +435,7 @@ Docker Inc. (n.d.). Install Docker Engine on Ubuntu. Docker Docs. https://docs.d
 Canonical. (n.d.). Netplan documentation. https://netplan.io/
 
 Anthropic. (2026). Claude (Sonnet 5.5) [Large language model]. https://claude.ai – used for explaining networking concepts and troubleshooting the deployment.
+
+
+
+
